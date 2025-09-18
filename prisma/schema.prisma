@@ -1,0 +1,27 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./tailor.db"
+}
+
+// Order model represents a tailor shop order
+model Order {
+  id              Int       @id @default(autoincrement())
+  queueNumber     Int       // Sequential queue number
+  customerName    String    // Customer's name
+  customerPhone   String    // Customer's phone number
+  serviceType     String    // Type of service (e.g., cutting, sewing, embroidery)
+  notes           String?   // Additional notes
+  pickupDate      DateTime  // Expected pickup date
+  price           Float     // Price of the service
+  paymentStatus   Boolean   @default(false) // Whether the order has been paid
+  processingStatus String   // Status of the order (e.g., "not started", "in progress", "completed")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
