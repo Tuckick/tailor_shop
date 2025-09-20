@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ImageUploader } from "@/components/ui/image-uploader";
+import { ImageGallery } from "@/components/ui/image-gallery";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
@@ -21,6 +23,7 @@ interface OrderDetails {
     price: number;
     paymentStatus: boolean;
     processingStatus: string;
+    imageUrls: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -39,6 +42,7 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
         price: "",
         paymentStatus: false,
         processingStatus: "",
+        imageUrls: [] as string[],
     });
 
     useEffect(() => {
@@ -57,6 +61,9 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
                 const data = await response.json();
                 setOrder(data);
 
+                // Parse imageUrls from JSON string if it exists
+                const imageUrls = data.imageUrls ? JSON.parse(data.imageUrls) : [];
+
                 setFormData({
                     customerName: data.customerName,
                     customerPhone: data.customerPhone,
@@ -66,6 +73,7 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
                     price: data.price.toString(),
                     paymentStatus: data.paymentStatus,
                     processingStatus: data.processingStatus,
+                    imageUrls: imageUrls,
                 });
             } catch (error) {
                 console.error("Error fetching order:", error);
@@ -96,6 +104,10 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
         setFormData(prev => ({ ...prev, pickupDate: date }));
     };
 
+    const handleImagesChange = (urls: string[]) => {
+        setFormData(prev => ({ ...prev, imageUrls: urls }));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -107,12 +119,18 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
         setIsSubmitting(true);
 
         try {
+            // Convert imageUrls array to JSON string before sending to API
+            const dataToSubmit = {
+                ...formData,
+                imageUrls: formData.imageUrls.length > 0 ? JSON.stringify(formData.imageUrls) : null
+            };
+
             const response = await fetch(`/api/orders/${params.id}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(formData),
+                body: JSON.stringify(dataToSubmit),
             });
 
             if (!response.ok) {
@@ -300,6 +318,17 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
                             <SelectItem value="completed">เสร็จสิ้น</SelectItem>
                         </SelectContent>
                     </Select>
+                </div>
+
+                <div className="space-y-3">
+                    <Label className="block text-sm font-medium text-gray-700 mb-1">รูปภาพ (ไม่เกิน 5 รูป)</Label>
+                    <ImageUploader
+                        maxImages={5}
+                        onImagesChange={handleImagesChange}
+                        initialImages={formData.imageUrls}
+                        className="pt-2"
+                    />
+
                 </div>
 
                 <div className="flex justify-end space-x-5 pt-6 mt-6 border-t border-gray-100">

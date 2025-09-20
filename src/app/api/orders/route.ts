@@ -76,7 +76,9 @@ export async function POST(request: NextRequest) {
         ...body,
         queueNumber,
         pickupDate: new Date(body.pickupDate),
-        price: parseFloat(body.price)
+        price: parseFloat(body.price),
+        // If imageUrls is already a string (JSON), use it directly; otherwise, set to null
+        imageUrls: typeof body.imageUrls === 'string' ? body.imageUrls : null
       }
     });
     
