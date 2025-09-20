@@ -35,8 +35,9 @@ const CustomDatePicker = ({
             onChange={onChange}
             customInput={
                 <Input
-                    className={cn("w-full", className)}
+                    className={cn("w-full bg-gray-50 border-gray-300", className)}
                     required={required}
+                    style={{ boxShadow: 'none' }} // Remove any default box shadow
                 />
             }
             placeholderText={placeholderText}
@@ -45,6 +46,10 @@ const CustomDatePicker = ({
             disabled={disabled}
             showMonthYearPicker={showMonthYearPicker}
             showYearPicker={showYearPicker}
+            // Add custom styling for the calendar popup
+            calendarClassName="bg-white shadow-lg border border-gray-200 rounded-lg"
+            dayClassName={date => "hover:bg-violet-100"}
+            popperClassName="date-picker-popper"
         />
     );
 };

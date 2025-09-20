@@ -19,11 +19,11 @@ export default function Home() {
                             สร้างรายการเย็บผ้าใหม่ ดูรายการทั้งหมด หรือแก้ไขรายการที่มีอยู่
                         </p>
                         <div className="mt-auto space-y-3 w-full">
-                            <Link href="/orders/new">
-                                <Button className="w-full">สร้างรายการใหม่</Button>
+                            <Link href="/orders/new" className="w-full block">
+                                <Button className="w-full bg-violet-600 hover:bg-violet-700">สร้างรายการใหม่</Button>
                             </Link>
-                            <Link href="/orders">
-                                <Button className="w-full" variant="outline">ดูรายการทั้งหมด</Button>
+                            <Link href="/orders" className="w-full block">
+                                <Button className="w-full hover:bg-gray-100 border-gray-300 text-gray-700" variant="outline">ดูรายการทั้งหมด</Button>
                             </Link>
                         </div>
                     </div>
@@ -34,8 +34,8 @@ export default function Home() {
                             ดูรายงานรายได้ประจำวัน ประจำเดือน หรือประจำปี
                         </p>
                         <div className="mt-auto w-full">
-                            <Link href="/reports">
-                                <Button className="w-full">ดูรายงาน</Button>
+                            <Link href="/reports" className="w-full block">
+                                <Button className="w-full bg-violet-600 hover:bg-violet-700">ดูรายงาน</Button>
                             </Link>
                         </div>
                     </div>

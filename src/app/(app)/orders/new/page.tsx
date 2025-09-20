@@ -79,12 +79,14 @@ export default function NewOrderPage() {
 
     return (
         <div className="container mx-auto py-8 px-4">
-            <h1 className="text-2xl font-bold mb-6">สร้างรายการใหม่</h1>
+            <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100 max-w-2xl mx-auto">
+                <h1 className="text-2xl font-bold text-gray-800">สร้างรายการใหม่</h1>
+            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl bg-white p-6 rounded-lg shadow-md">
+            <form onSubmit={handleSubmit} className="space-y-8 max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-sm border border-gray-100">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <Label htmlFor="customerName">ชื่อลูกค้า</Label>
+                    <div className="space-y-3">
+                        <Label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-1">ชื่อลูกค้า</Label>
                         <Input
                             id="customerName"
                             name="customerName"
@@ -92,11 +94,12 @@ export default function NewOrderPage() {
                             onChange={handleChange}
                             placeholder="ชื่อลูกค้า"
                             required
+                            className="bg-gray-50 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                         />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="customerPhone">เบอร์โทรศัพท์</Label>
+                    <div className="space-y-3">
+                        <Label htmlFor="customerPhone" className="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</Label>
                         <Input
                             id="customerPhone"
                             name="customerPhone"
@@ -104,17 +107,18 @@ export default function NewOrderPage() {
                             onChange={handleChange}
                             placeholder="เบอร์โทรศัพท์"
                             required
+                            className="bg-gray-50 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                         />
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="serviceType">ประเภทบริการ</Label>
+                <div className="space-y-3">
+                    <Label htmlFor="serviceType" className="block text-sm font-medium text-gray-700 mb-1">ประเภทบริการ</Label>
                     <Select
                         value={formData.serviceType}
                         onValueChange={(value) => handleSelectChange("serviceType", value)}
                     >
-                        <SelectTrigger id="serviceType" aria-label="เลือกประเภทบริการ">
+                        <SelectTrigger id="serviceType" aria-label="เลือกประเภทบริการ" className="bg-gray-50 border-gray-300 focus:border-violet-500 focus:ring-violet-500">
                             <SelectValue placeholder="เลือกประเภทบริการ" />
                         </SelectTrigger>
                         <SelectContent>
@@ -127,30 +131,34 @@ export default function NewOrderPage() {
                     </Select>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="notes">หมายเหตุ</Label>
+                <div className="space-y-3">
+                    <Label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">หมายเหตุ</Label>
                     <Textarea
                         id="notes"
                         name="notes"
                         value={formData.notes}
                         onChange={handleChange}
                         placeholder="รายละเอียดเพิ่มเติม"
+                        className="bg-gray-50 border-gray-300 focus:border-violet-500 focus:ring-violet-500 min-h-[100px]"
                     />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <Label htmlFor="pickupDate">วันนัดรับ</Label>
-                        <CustomDatePicker
-                            selected={formData.pickupDate}
-                            onChange={handleDateChange}
-                            placeholderText="เลือกวันนัดรับ"
-                            required
-                        />
+                    <div className="space-y-3">
+                        <Label htmlFor="pickupDate" className="block text-sm font-medium text-gray-700 mb-1">วันนัดรับ</Label>
+                        <div className="relative w-full">
+                            <CustomDatePicker
+                                selected={formData.pickupDate}
+                                onChange={handleDateChange}
+                                placeholderText="เลือกวันนัดรับ"
+                                required
+                                className="w-full"
+                            />
+                        </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="price">ราคา</Label>
+                    <div className="space-y-3">
+                        <Label htmlFor="price" className="block text-sm font-medium text-gray-700 mb-1">ราคา</Label>
                         <Input
                             id="price"
                             name="price"
@@ -160,26 +168,28 @@ export default function NewOrderPage() {
                             placeholder="ราคา"
                             min="0"
                             required
+                            className="bg-gray-50 border-gray-300 focus:border-violet-500 focus:ring-violet-500"
                         />
                     </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-3 p-4 my-2 bg-violet-50 rounded-md border border-violet-100">
                     <Checkbox
                         id="paymentStatus"
                         checked={formData.paymentStatus}
                         onCheckedChange={(checked) => handleCheckboxChange("paymentStatus", checked === true)}
+                        className="h-5 w-5 text-violet-600 focus:ring-violet-500 rounded"
                     />
-                    <Label htmlFor="paymentStatus" className="cursor-pointer">จ่ายเงินแล้ว</Label>
+                    <Label htmlFor="paymentStatus" className="cursor-pointer text-gray-800 font-medium">จ่ายเงินแล้ว</Label>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="processingStatus">สถานะการดำเนินการ</Label>
+                <div className="space-y-3">
+                    <Label htmlFor="processingStatus" className="block text-sm font-medium text-gray-700 mb-1">สถานะการดำเนินการ</Label>
                     <Select
                         value={formData.processingStatus}
                         onValueChange={(value) => handleSelectChange("processingStatus", value)}
                     >
-                        <SelectTrigger id="processingStatus" aria-label="เลือกสถานะ">
+                        <SelectTrigger id="processingStatus" aria-label="เลือกสถานะ" className="bg-gray-50 border-gray-300 focus:border-violet-500 focus:ring-violet-500">
                             <SelectValue placeholder="เลือกสถานะ" />
                         </SelectTrigger>
                         <SelectContent>
@@ -190,19 +200,31 @@ export default function NewOrderPage() {
                     </Select>
                 </div>
 
-                <div className="flex justify-end space-x-4">
+                <div className="flex justify-end space-x-5 pt-6 mt-6 border-t border-gray-100">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={() => router.back()}
+                        className="px-6 py-2.5 hover:bg-gray-100 border-gray-300 text-gray-700"
                     >
                         ยกเลิก
                     </Button>
                     <Button
                         type="submit"
                         disabled={isSubmitting}
+                        className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 min-w-[100px]"
                     >
-                        {isSubmitting ? "กำลังบันทึก..." : "บันทึก"}
+                        {isSubmitting ? (
+                            <>
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                กำลังบันทึก
+                            </>
+                        ) : (
+                            <>บันทึก</>
+                        )}
                     </Button>
                 </div>
             </form>

@@ -8,7 +8,7 @@ export default function Home() {
   return (
     <>
       <Navigation />
-      
+
       {/* Hero section with gradient background */}
       <div className="bg-gradient-to-b from-violet-50 to-white py-20 px-4">
         <div className="container mx-auto max-w-5xl">
