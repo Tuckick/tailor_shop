@@ -6,8 +6,10 @@ import { CustomDatePicker } from "@/components/ui/datepicker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import * as Tabs from "@radix-ui/react-tabs";
 import { cn } from "@/lib/utils";
+import { ImagePreviewModal } from "@/components/ui/image-preview-modal";
 
 interface Order {
     id: number;
@@ -20,6 +22,7 @@ interface Order {
     price: number;
     paymentStatus: boolean;
     processingStatus: string;
+    imageUrls: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -29,6 +32,7 @@ export default function OrderListPage() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
     const [activeTab, setActiveTab] = useState("all");
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
 
     // Filter states
     const [statusFilter, setStatusFilter] = useState("all");
@@ -151,6 +155,18 @@ export default function OrderListPage() {
         }
     };
 
+    const getFirstImageUrl = (imageUrlsJson: string | null): string | null => {
+        if (!imageUrlsJson) return null;
+
+        try {
+            const urls = JSON.parse(imageUrlsJson);
+            return urls && urls.length > 0 ? urls[0] : null;
+        } catch (error) {
+            console.error("Error parsing image URLs:", error);
+            return null;
+        }
+    };
+
     if (isLoading) {
         return (
             <div className="container mx-auto py-8 px-4">
@@ -264,6 +280,9 @@ export default function OrderListPage() {
                                         คิว
                                     </th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-violet-800 uppercase tracking-wider">
+                                        รูปภาพ
+                                    </th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-violet-800 uppercase tracking-wider">
                                         ลูกค้า
                                     </th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-violet-800 uppercase tracking-wider">
@@ -291,6 +310,27 @@ export default function OrderListPage() {
                                     <tr key={order.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">
                                             #{order.queueNumber}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {getFirstImageUrl(order.imageUrls) ? (
+                                                <div
+                                                    className="relative h-12 w-12 rounded-md overflow-hidden cursor-pointer border border-gray-200 hover:border-violet-500 transition-colors"
+                                                    onClick={() => setPreviewImage(getFirstImageUrl(order.imageUrls))}
+                                                >
+                                                    <Image
+                                                        src={getFirstImageUrl(order.imageUrls)!}
+                                                        alt="รูปภาพออเดอร์"
+                                                        fill
+                                                        className="object-cover"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="h-12 w-12 rounded-md flex items-center justify-center bg-gray-100 text-gray-400">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="text-sm font-medium text-gray-800">{order.customerName}</div>
@@ -333,6 +373,15 @@ export default function OrderListPage() {
                     </div>
                 )}
             </Tabs.Root>
+
+            {/* Image Preview Modal */}
+            {previewImage && (
+                <ImagePreviewModal
+                    imageUrl={previewImage}
+                    isOpen={!!previewImage}
+                    onClose={() => setPreviewImage(null)}
+                />
+            )}
         </div>
     );
 }
