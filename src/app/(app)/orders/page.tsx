@@ -86,6 +86,36 @@ export default function OrderListPage() {
         }
     }, [orders]);
 
+    // เพิ่ม useEffect เพื่อรีเฟรชข้อมูลเมื่อกลับมาที่หน้านี้
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                // รีเฟรชข้อมูลเมื่อกลับมาที่หน้า
+                const fetchOrders = async () => {
+                    try {
+                        const response = await fetch("/api/orders");
+                        if (response.ok) {
+                            const data = await response.json();
+                            setOrders(data);
+                            setFilteredOrders(data);
+                            // ล้าง image cache เพื่อให้โหลดรูปใหม่
+                            setImageCache({});
+                        }
+                    } catch (error) {
+                        console.error("Error refreshing orders:", error);
+                    }
+                };
+
+                fetchOrders();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
+
     const applyFilters = () => {
         let filtered = [...orders];
 
@@ -187,20 +217,33 @@ export default function OrderListPage() {
             const imageIds = JSON.parse(order.imageUrls);
             if (!Array.isArray(imageIds) || imageIds.length === 0) return;
 
-            const firstImageId = imageIds[0].toString();
+            // หารูปแรกที่มีอยู่จริงในฐานข้อมูล
+            for (const imageId of imageIds) {
+                const imageIdStr = imageId.toString();
 
-            if (imageCache[firstImageId]) return;
+                // ถ้ามีใน cache แล้วให้ใช้เลย
+                if (imageCache[imageIdStr]) {
+                    return;
+                }
 
-            const response = await fetch(`/api/images/${firstImageId}`);
-            if (!response.ok) return;
-
-            const imageData = await response.json();
-            setImageCache(prev => ({
-                ...prev,
-                [firstImageId]: imageData.dataUrl
-            }));
+                try {
+                    const response = await fetch(`/api/images/${imageIdStr}`);
+                    if (response.ok) {
+                        const imageData = await response.json();
+                        setImageCache(prev => ({
+                            ...prev,
+                            [imageIdStr]: imageData.dataUrl,
+                            [`order_${order.id}_first`]: imageData.dataUrl // เก็บ reference ถึงรูปแรกของ order นี้
+                        }));
+                        return; // พอได้รูปแรกที่โหลดได้แล้วก็หยุด
+                    }
+                } catch (error) {
+                    console.warn(`Failed to load image ${imageIdStr}:`, error);
+                    continue; // ลองรูปต่ไป
+                }
+            }
         } catch (error) {
-            console.error('Error loading image:', error);
+            console.error('Error loading image for order:', order.id, error);
         }
     };
 
@@ -211,8 +254,21 @@ export default function OrderListPage() {
             const imageIds = JSON.parse(order.imageUrls);
             if (!Array.isArray(imageIds) || imageIds.length === 0) return null;
 
-            const firstImageId = imageIds[0].toString();
-            return imageCache[firstImageId] || null;
+            // ลองหารูปแรกที่มีอยู่ใน cache
+            for (const imageId of imageIds) {
+                const imageIdStr = imageId.toString();
+                if (imageCache[imageIdStr]) {
+                    return imageCache[imageIdStr];
+                }
+            }
+
+            // ถ้าไม่เจอ ลองดูจาก order-specific cache
+            const orderFirstImage = imageCache[`order_${order.id}_first`];
+            if (orderFirstImage) {
+                return orderFirstImage;
+            }
+
+            return null;
         } catch (error) {
             return null;
         }
@@ -231,14 +287,45 @@ export default function OrderListPage() {
         <div className="container mx-auto py-8 px-4">
             <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-lg shadow-sm border border-gray-100">
                 <h1 className="text-2xl font-bold text-gray-800">รายการเย็บผ้า</h1>
-                <Link href="/orders/new">
-                    <Button className="bg-violet-600 hover:bg-violet-700">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                <div className="flex space-x-3">
+                    <Button
+                        variant="outline"
+                        onClick={() => {
+                            // รีเฟรชข้อมูลและล้าง cache
+                            setImageCache({});
+                            const fetchOrders = async () => {
+                                setIsLoading(true);
+                                try {
+                                    const response = await fetch("/api/orders");
+                                    if (response.ok) {
+                                        const data = await response.json();
+                                        setOrders(data);
+                                        setFilteredOrders(data);
+                                    }
+                                } catch (error) {
+                                    console.error("Error refreshing orders:", error);
+                                } finally {
+                                    setIsLoading(false);
+                                }
+                            };
+                            fetchOrders();
+                        }}
+                        className="hover:bg-gray-100"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.01M20 4v5h-.01M4 20v-5h.01M20 20v-5h-.01M12 3v3m6.366-.366l-2.12 2.12M21 12h-3m-.366 6.366l-2.12-2.12M12 21v-3m-6.366-.366l2.12-2.12M3 12h3m.366-6.366l2.12 2.12" />
                         </svg>
-                        สร้างรายการใหม่
+                        รีเฟรช
                     </Button>
-                </Link>
+                    <Link href="/orders/new">
+                        <Button className="bg-violet-600 hover:bg-violet-700">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                            </svg>
+                            สร้างรายการใหม่
+                        </Button>
+                    </Link>
+                </div>
             </div>
 
             <Tabs.Root value={activeTab} onValueChange={setActiveTab}>

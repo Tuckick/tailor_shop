@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from './button';
 import { SafeImage } from './safe-image';
 import { ImagePreviewModal } from './image-preview-modal';
@@ -25,12 +25,20 @@ export function ImageUploader({
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    const [removingImageIndex, setRemovingImageIndex] = useState<number | null>(null);
+
+    // Memoize the initial arrays to prevent unnecessary re-renders
+    const memoizedInitialImageIds = useMemo(() => initialImageIds, [JSON.stringify(initialImageIds)]);
+    const memoizedInitialDataUrls = useMemo(() => initialDataUrls, [JSON.stringify(initialDataUrls)]);
 
     // Update state when initial props change (for edit page)
     useEffect(() => {
-        setUploadedImageIds(initialImageIds);
-        setUploadedDataUrls(initialDataUrls);
-    }, [initialImageIds, initialDataUrls]);
+        setUploadedImageIds(memoizedInitialImageIds);
+    }, [memoizedInitialImageIds]);
+
+    useEffect(() => {
+        setUploadedDataUrls(memoizedInitialDataUrls);
+    }, [memoizedInitialDataUrls]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
@@ -100,6 +108,13 @@ export function ImageUploader({
     };
 
     const handleRemoveImage = async (index: number) => {
+        // แสดงการยืนยันก่อนลบรูป
+        if (!window.confirm('คุณต้องการลบรูปนี้ใช่หรือไม่?')) {
+            return;
+        }
+
+        setRemovingImageIndex(index);
+
         try {
             const imageId = uploadedImageIds[index];
 
@@ -111,6 +126,7 @@ export function ImageUploader({
 
                 if (!response.ok) {
                     console.warn('Failed to delete image from database');
+                    throw new Error('ไม่สามารถลบรูปจากฐานข้อมูลได้');
                 }
             }
 
@@ -122,6 +138,9 @@ export function ImageUploader({
             onImagesChange(newImageIds, newDataUrls);
         } catch (error) {
             console.error('Error removing image:', error);
+            setUploadError('เกิดข้อผิดพลาดในการลบรูป: ' + (error as Error).message);
+        } finally {
+            setRemovingImageIndex(null);
         }
     };
 
@@ -169,25 +188,44 @@ export function ImageUploader({
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                     {uploadedDataUrls.map((dataUrl: string, index: number) => {
                         console.log(`Rendering image ${index} with dataUrl:`, dataUrl.substring(0, 50) + '...');
+                        const isRemoving = removingImageIndex === index;
+
                         return (
                             <div key={index} className="relative group rounded-lg overflow-hidden border border-gray-200 aspect-square">
+                                {/* Loading overlay ขณะลบรูป */}
+                                {isRemoving && (
+                                    <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
+                                        <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                    </div>
+                                )}
+
                                 <img
                                     src={dataUrl}
                                     alt={`Uploaded image ${index + 1}`}
                                     className="w-full h-full object-cover cursor-pointer"
-                                    onClick={() => setSelectedImage(dataUrl)}
+                                    onClick={() => !isRemoving && setSelectedImage(dataUrl)}
                                     onLoad={() => console.log(`Image ${index} loaded successfully`)}
                                     onError={(e) => console.error(`Image ${index} failed to load:`, e)}
                                 />
+
+                                {/* ปุ่มลบรูป - ปรับให้เห็นชัดขึ้นและแสดงตลอดเวลาในมือถือ */}
                                 <button
                                     type="button"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         handleRemoveImage(index);
                                     }}
-                                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    disabled={isRemoving}
+                                    className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 shadow-lg 
+                                             opacity-80 group-hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 
+                                             transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
+                                             focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                                    title="ลบรูป"
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                     </svg>
                                 </button>
