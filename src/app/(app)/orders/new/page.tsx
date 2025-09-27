@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { safeStringifyImageUrls } from "@/lib/json-utils";
 
 export default function NewOrderPage() {
     const router = useRouter();
@@ -23,7 +24,7 @@ export default function NewOrderPage() {
         price: "",
         paymentStatus: false,
         processingStatus: "not_started",
-        imageUrls: [] as string[],
+        imageIds: [] as string[],
     });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -43,8 +44,8 @@ export default function NewOrderPage() {
         setFormData(prev => ({ ...prev, pickupDate: date }));
     };
 
-    const handleImagesChange = (urls: string[]) => {
-        setFormData(prev => ({ ...prev, imageUrls: urls }));
+    const handleImagesChange = (imageIds: number[], dataUrls: string[]) => {
+        setFormData(prev => ({ ...prev, imageIds: imageIds.map(String) }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -58,10 +59,10 @@ export default function NewOrderPage() {
         setIsSubmitting(true);
 
         try {
-            // Convert imageUrls array to JSON string before sending to API
+            // Use image IDs for submission
             const dataToSubmit = {
                 ...formData,
-                imageUrls: formData.imageUrls.length > 0 ? JSON.stringify(formData.imageUrls) : null
+                imageIds: formData.imageIds
             };
 
             const response = await fetch("/api/orders", {
@@ -217,7 +218,7 @@ export default function NewOrderPage() {
                     <ImageUploader
                         maxImages={5}
                         onImagesChange={handleImagesChange}
-                        initialImages={formData.imageUrls}
+                        initialImageIds={formData.imageIds.map(Number)}
                         className="pt-2"
                     />
                 </div>

@@ -22,7 +22,23 @@ model Order {
   price           Float     // Price of the service
   paymentStatus   Boolean   @default(false) // Whether the order has been paid
   processingStatus String   // Status of the order (e.g., "not started", "in progress", "completed")
-  imageUrls       String?   // Optional JSON string containing URLs of uploaded images
+  imageUrls       String?   // Deprecated: Optional JSON string containing URLs of uploaded images
+  images          Image[]   // Relation to Image model
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+// Image model to store images in database as Base64
+model Image {
+  id          Int      @id @default(autoincrement())
+  orderId     Int?     // Foreign key to Order (optional for standalone uploads)
+  order       Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  filename    String   // Original filename
+  mimeType    String   // MIME type (e.g., image/jpeg, image/png)
+  data        String   // Base64 encoded image data
+  size        Int      // File size in bytes
+  width       Int?     // Image width in pixels
+  height      Int?     // Image height in pixels
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

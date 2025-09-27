@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { ImageGallery } from "@/components/ui/image-gallery";
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
+import { safeParseImageUrls, safeStringifyImageUrls } from "@/lib/json-utils";
 
 interface OrderDetails {
     id: number;
@@ -28,8 +29,9 @@ interface OrderDetails {
     updatedAt: string;
 }
 
-export default function OrderEditPage({ params }: { params: { id: string } }) {
+export default function OrderEditPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
+    const resolvedParams = use(params);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [order, setOrder] = useState<OrderDetails | null>(null);
@@ -42,13 +44,14 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
         price: "",
         paymentStatus: false,
         processingStatus: "",
-        imageUrls: [] as string[],
+        imageIds: [] as string[],
+        imageDataUrls: [] as string[], // Add this to store data URLs
     });
 
     useEffect(() => {
         const fetchOrderDetails = async () => {
             try {
-                const response = await fetch(`/api/orders/${params.id}`);
+                const response = await fetch(`/api/orders/${resolvedParams.id}`);
 
                 if (!response.ok) {
                     if (response.status === 404) {
@@ -61,8 +64,25 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
                 const data = await response.json();
                 setOrder(data);
 
-                // Parse imageUrls from JSON string if it exists
-                const imageUrls = data.imageUrls ? JSON.parse(data.imageUrls) : [];
+                // Parse image IDs from stored JSON and load data URLs
+                const imageIds = data.imageUrls ? JSON.parse(data.imageUrls) : [];
+                const imageIdsArray = Array.isArray(imageIds) ? imageIds.map(String) : [];
+
+                // Load image data URLs for existing images
+                const imageDataUrls: string[] = [];
+                if (imageIdsArray.length > 0) {
+                    for (const imageId of imageIdsArray) {
+                        try {
+                            const imageResponse = await fetch(`/api/images/${imageId}`);
+                            if (imageResponse.ok) {
+                                const imageData = await imageResponse.json();
+                                imageDataUrls.push(imageData.dataUrl);
+                            }
+                        } catch (error) {
+                            console.warn(`Failed to load image ${imageId}:`, error);
+                        }
+                    }
+                }
 
                 setFormData({
                     customerName: data.customerName,
@@ -73,7 +93,8 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
                     price: data.price.toString(),
                     paymentStatus: data.paymentStatus,
                     processingStatus: data.processingStatus,
-                    imageUrls: imageUrls,
+                    imageIds: imageIdsArray,
+                    imageDataUrls: imageDataUrls,
                 });
             } catch (error) {
                 console.error("Error fetching order:", error);
@@ -85,7 +106,7 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
         };
 
         fetchOrderDetails();
-    }, [params.id, router]);
+    }, [resolvedParams.id, router]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -104,8 +125,44 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
         setFormData(prev => ({ ...prev, pickupDate: date }));
     };
 
-    const handleImagesChange = (urls: string[]) => {
-        setFormData(prev => ({ ...prev, imageUrls: urls }));
+    const handleImagesChange = (imageIds: number[], dataUrls: string[]) => {
+        setFormData(prev => ({
+            ...prev,
+            imageIds: imageIds.map(String),
+            imageDataUrls: dataUrls
+        }));
+    };
+
+    const getProcessingStatusColor = (status: string) => {
+        switch (status) {
+            case "not_started":
+                return "bg-red-100 text-red-800 border border-red-200";
+            case "in_progress":
+                return "bg-orange-100 text-orange-800 border border-orange-200";
+            case "completed":
+                return "bg-green-100 text-green-800 border border-green-200";
+            default:
+                return "bg-gray-100 text-gray-800 border border-gray-200";
+        }
+    };
+
+    const getProcessingStatusText = (status: string) => {
+        switch (status) {
+            case "not_started":
+                return "ยังไม่เริ่ม";
+            case "in_progress":
+                return "กำลังดำเนินการ";
+            case "completed":
+                return "เสร็จสิ้น";
+            default:
+                return status;
+        }
+    };
+
+    const getPaymentStatusColor = (isPaid: boolean) => {
+        return isPaid
+            ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+            : "bg-rose-100 text-rose-800 border border-rose-200";
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -119,13 +176,20 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
         setIsSubmitting(true);
 
         try {
-            // Convert imageUrls array to JSON string before sending to API
+            // Send image IDs instead of URLs
             const dataToSubmit = {
-                ...formData,
-                imageUrls: formData.imageUrls.length > 0 ? JSON.stringify(formData.imageUrls) : null
+                customerName: formData.customerName,
+                customerPhone: formData.customerPhone,
+                serviceType: formData.serviceType,
+                notes: formData.notes,
+                pickupDate: formData.pickupDate?.toISOString(),
+                price: parseFloat(formData.price),
+                paymentStatus: formData.paymentStatus,
+                processingStatus: formData.processingStatus,
+                imageIds: formData.imageIds,
             };
 
-            const response = await fetch(`/api/orders/${params.id}`, {
+            const response = await fetch(`/api/orders/${resolvedParams.id}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -154,7 +218,7 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
         }
 
         try {
-            const response = await fetch(`/api/orders/${params.id}`, {
+            const response = await fetch(`/api/orders/${resolvedParams.id}`, {
                 method: "DELETE",
             });
 
@@ -301,10 +365,46 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
                         className="h-5 w-5 text-violet-600 focus:ring-violet-500 rounded"
                     />
                     <Label htmlFor="paymentStatus" className="cursor-pointer text-gray-800 font-medium">จ่ายเงินแล้ว</Label>
+                    <span className={`px-3 py-1.5 inline-flex text-xs leading-5 font-semibold rounded-lg shadow-sm ml-auto ${getPaymentStatusColor(formData.paymentStatus)}`}>
+                        <span className="flex items-center">
+                            {formData.paymentStatus ? (
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zM14 6a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h8zM6 10a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h3a1 1 0 100-2H7z" />
+                                </svg>
+                            ) : (
+                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+                                </svg>
+                            )}
+                            {formData.paymentStatus ? "จ่ายแล้ว" : "ยังไม่จ่าย"}
+                        </span>
+                    </span>
                 </div>
 
                 <div className="space-y-3">
-                    <Label htmlFor="processingStatus" className="block text-sm font-medium text-gray-700 mb-1">สถานะการดำเนินการ</Label>
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="processingStatus" className="block text-sm font-medium text-gray-700 mb-1">สถานะการดำเนินการ</Label>
+                        <span className={`px-3 py-1.5 inline-flex text-xs leading-5 font-semibold rounded-lg shadow-sm ${getProcessingStatusColor(formData.processingStatus)}`}>
+                            <span className="flex items-center">
+                                {formData.processingStatus === "not_started" && (
+                                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5l-3 5a1 1 0 101.732 1L8 12.039l1.135 1.866a1 1 0 101.73-1.001l-3-5A1 1 0 0010 7z" clipRule="evenodd" />
+                                    </svg>
+                                )}
+                                {formData.processingStatus === "in_progress" && (
+                                    <svg className="w-3 h-3 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h5M20 20v-5h-5M4 20l16-16" />
+                                    </svg>
+                                )}
+                                {formData.processingStatus === "completed" && (
+                                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                    </svg>
+                                )}
+                                {getProcessingStatusText(formData.processingStatus)}
+                            </span>
+                        </span>
+                    </div>
                     <Select
                         value={formData.processingStatus}
                         onValueChange={(value) => handleSelectChange("processingStatus", value)}
@@ -325,10 +425,11 @@ export default function OrderEditPage({ params }: { params: { id: string } }) {
                     <ImageUploader
                         maxImages={5}
                         onImagesChange={handleImagesChange}
-                        initialImages={formData.imageUrls}
+                        initialImageIds={formData.imageIds.map(Number)}
+                        initialDataUrls={formData.imageDataUrls}
+                        orderId={order.id}
                         className="pt-2"
                     />
-
                 </div>
 
                 <div className="flex justify-end space-x-5 pt-6 mt-6 border-t border-gray-100">

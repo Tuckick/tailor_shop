@@ -11,7 +11,17 @@ export async function GET(request: NextRequest) {
     const pickupDate = searchParams.get('pickupDate');
     
     // Build filter conditions
-    const where: any = {};
+    interface WhereCondition {
+      processingStatus?: string;
+      queueNumber?: number;
+      OR?: Array<{ customerName?: { contains: string }; customerPhone?: { contains: string } }>;
+      pickupDate?: {
+        gte: Date;
+        lt: Date;
+      };
+    }
+    
+    const where: WhereCondition = {};
     
     if (status) {
       where.processingStatus = status;
@@ -73,20 +83,50 @@ export async function POST(request: NextRequest) {
     // Create the new order with auto-incremented queue number
     const newOrder = await prisma.order.create({
       data: {
-        ...body,
+        customerName: body.customerName,
+        customerPhone: body.customerPhone,
+        serviceType: body.serviceType,
+        notes: body.notes || null,
         queueNumber,
         pickupDate: new Date(body.pickupDate),
         price: parseFloat(body.price),
-        // If imageUrls is already a string (JSON), use it directly; otherwise, set to null
-        imageUrls: typeof body.imageUrls === 'string' ? body.imageUrls : null
+        paymentStatus: body.paymentStatus || false,
+        processingStatus: body.processingStatus || 'not_started',
+        // Keep the deprecated field for backward compatibility
+        imageUrls: body.imageIds && body.imageIds.length > 0 ? JSON.stringify(body.imageIds) : null
       }
     });
+    
+    // Link uploaded images to this order
+    if (body.imageIds && body.imageIds.length > 0) {
+      const imageIds = body.imageIds.map((id: string) => parseInt(id)).filter((id: number) => !isNaN(id));
+      
+      if (imageIds.length > 0) {
+                // Get all images that need to be linked to this order (those without an orderId)
+        const allImages = await prisma.image.findMany({
+          where: {
+            id: { in: imageIds }
+          }
+        });
+        
+        // Filter for images without orderId
+        const imagesToUpdate = allImages.filter(image => image.orderId === null);
+        
+        // Update each image individually 
+        for (const image of imagesToUpdate) {
+          await prisma.image.update({
+            where: { id: image.id },
+            data: { orderId: newOrder.id }
+          });
+        }
+      }
+    }
     
     return NextResponse.json(newOrder, { status: 201 });
   } catch (error) {
     console.error('Error creating order:', error);
     return NextResponse.json(
-      { error: 'Failed to create order' },
+      { error: 'Failed to create order', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

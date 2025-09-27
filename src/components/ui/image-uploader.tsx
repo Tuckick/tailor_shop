@@ -1,32 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './button';
-import Image from 'next/image';
+import { SafeImage } from './safe-image';
 import { ImagePreviewModal } from './image-preview-modal';
 
 interface ImageUploaderProps {
     maxImages?: number;
-    onImagesChange: (urls: string[]) => void;
-    initialImages?: string[];
+    onImagesChange: (imageIds: number[], dataUrls: string[]) => void;
+    initialImageIds?: number[];
+    initialDataUrls?: string[];
     className?: string;
+    orderId?: number; // Optional order ID for associating images
 }
 
 export function ImageUploader({
     maxImages = 5,
     onImagesChange,
-    initialImages = [],
-    className
+    initialImageIds = [],
+    initialDataUrls = [],
+    className,
+    orderId
 }: ImageUploaderProps) {
-    const [uploadedImages, setUploadedImages] = useState<string[]>(initialImages);
+    const [uploadedImageIds, setUploadedImageIds] = useState<number[]>(initialImageIds);
+    const [uploadedDataUrls, setUploadedDataUrls] = useState<string[]>(initialDataUrls);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+    // Update state when initial props change (for edit page)
+    useEffect(() => {
+        setUploadedImageIds(initialImageIds);
+        setUploadedDataUrls(initialDataUrls);
+    }, [initialImageIds, initialDataUrls]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
         // Check if adding more images would exceed the limit
-        if (uploadedImages.length + files.length > maxImages) {
+        if (uploadedDataUrls.length + files.length > maxImages) {
             setUploadError(`คุณสามารถอัพโหลดรูปได้สูงสุด ${maxImages} รูปเท่านั้น`);
             return;
         }
@@ -35,7 +46,8 @@ export function ImageUploader({
         setUploadError(null);
 
         try {
-            const newImages: string[] = [...uploadedImages];
+            const newImageIds: number[] = [...uploadedImageIds];
+            const newDataUrls: string[] = [...uploadedDataUrls];
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -56,6 +68,9 @@ export function ImageUploader({
 
                 const formData = new FormData();
                 formData.append('file', file);
+                if (orderId) {
+                    formData.append('orderId', orderId.toString());
+                }
 
                 const response = await fetch('/api/upload', {
                     method: 'POST',
@@ -63,16 +78,19 @@ export function ImageUploader({
                 });
 
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'เกิดข้อผิดพลาดในการอัพโหลดรูป');
+                    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
                 }
 
                 const data = await response.json();
-                newImages.push(data.url);
+                console.log('Upload successful:', data);
+                newImageIds.push(data.imageId);
+                newDataUrls.push(data.dataUrl);
             }
 
-            setUploadedImages(newImages);
-            onImagesChange(newImages); // Send the updated images array back to parent component
+            setUploadedImageIds(newImageIds);
+            setUploadedDataUrls(newDataUrls);
+            onImagesChange(newImageIds, newDataUrls);
         } catch (error) {
             console.error('Error uploading images:', error);
             setUploadError((error as Error).message || 'เกิดข้อผิดพลาดในการอัพโหลดรูป');
@@ -81,11 +99,30 @@ export function ImageUploader({
         }
     };
 
-    const handleRemoveImage = (index: number) => {
-        const newImages = [...uploadedImages];
-        newImages.splice(index, 1);
-        setUploadedImages(newImages);
-        onImagesChange(newImages);
+    const handleRemoveImage = async (index: number) => {
+        try {
+            const imageId = uploadedImageIds[index];
+
+            // Delete from database if it has an ID
+            if (imageId) {
+                const response = await fetch(`/api/images/${imageId}`, {
+                    method: 'DELETE',
+                });
+
+                if (!response.ok) {
+                    console.warn('Failed to delete image from database');
+                }
+            }
+
+            const newImageIds = uploadedImageIds.filter((_, i) => i !== index);
+            const newDataUrls = uploadedDataUrls.filter((_, i) => i !== index);
+
+            setUploadedImageIds(newImageIds);
+            setUploadedDataUrls(newDataUrls);
+            onImagesChange(newImageIds, newDataUrls);
+        } catch (error) {
+            console.error('Error removing image:', error);
+        }
     };
 
     return (
@@ -108,11 +145,11 @@ export function ImageUploader({
                         multiple
                         onChange={handleImageUpload}
                         className="hidden"
-                        disabled={isUploading || uploadedImages.length >= maxImages}
+                        disabled={isUploading || uploadedDataUrls.length >= maxImages}
                     />
                 </div>
                 <span className="text-sm text-gray-500">
-                    {uploadedImages.length}/{maxImages} รูป
+                    {uploadedDataUrls.length}/{maxImages} รูป
                 </span>
             </div>
 
@@ -128,51 +165,35 @@ export function ImageUploader({
 
             {uploadError && <p className="text-red-500 text-sm">{uploadError}</p>}
 
-            {uploadedImages.length > 0 && (
+            {(uploadedDataUrls.length > 0 || uploadedImageIds.length > 0) && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                    {uploadedImages.map((imageUrl, index) => (
-                        <div key={index} className="relative group rounded-lg overflow-hidden border border-gray-200">
-                            <div
-                                className="aspect-square relative cursor-pointer"
-                                onClick={() => setSelectedImage(imageUrl)}
-                            >
-                                <Image
-                                    src={imageUrl}
+                    {uploadedDataUrls.map((dataUrl: string, index: number) => {
+                        console.log(`Rendering image ${index} with dataUrl:`, dataUrl.substring(0, 50) + '...');
+                        return (
+                            <div key={index} className="relative group rounded-lg overflow-hidden border border-gray-200 aspect-square">
+                                <img
+                                    src={dataUrl}
                                     alt={`Uploaded image ${index + 1}`}
-                                    fill
-                                    className="object-cover"
+                                    className="w-full h-full object-cover cursor-pointer"
+                                    onClick={() => setSelectedImage(dataUrl)}
+                                    onLoad={() => console.log(`Image ${index} loaded successfully`)}
+                                    onError={(e) => console.error(`Image ${index} failed to load:`, e)}
                                 />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-0 hover:bg-opacity-30 transition-all duration-200">
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                        />
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveImage(index);
+                                    }}
+                                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                     </svg>
-                                </div>
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveImage(index);
-                                }}
-                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 

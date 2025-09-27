@@ -4,10 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET /api/orders/[id] - Get a single order by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id);
+    const resolvedParams = await params;
+    const id = parseInt(resolvedParams.id);
     
     if (isNaN(id)) {
       return NextResponse.json(
@@ -40,10 +41,11 @@ export async function GET(
 // PUT /api/orders/[id] - Update an order
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id);
+    const resolvedParams = await params;
+    const id = parseInt(resolvedParams.id);
     
     if (isNaN(id)) {
       return NextResponse.json(
@@ -66,6 +68,12 @@ export async function PUT(
       updateData.price = parseFloat(body.price);
     }
     
+    // Handle imageIds - store as JSON string in imageUrls field
+    if (body.imageIds !== undefined) {
+      updateData.imageUrls = body.imageIds && body.imageIds.length > 0 ? JSON.stringify(body.imageIds) : null;
+      delete updateData.imageIds; // Remove imageIds from update data since it doesn't exist in schema
+    }
+    
     const updatedOrder = await prisma.order.update({
       where: { id },
       data: updateData
@@ -84,10 +92,11 @@ export async function PUT(
 // DELETE /api/orders/[id] - Delete an order
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id);
+    const resolvedParams = await params;
+    const id = parseInt(resolvedParams.id);
     
     if (isNaN(id)) {
       return NextResponse.json(
