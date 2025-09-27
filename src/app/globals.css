@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./font-size.css";
 
 :root {
   --background: #ffffff;
