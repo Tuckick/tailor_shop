@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
         });
         
         // Filter for images without orderId
-        const imagesToUpdate = allImages.filter(image => image.orderId === null);
+        const imagesToUpdate = allImages.filter((image: any) => image.orderId === null);
         
         // Update each image individually 
         for (const image of imagesToUpdate) {
