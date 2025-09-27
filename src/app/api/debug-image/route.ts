@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -13,8 +15,6 @@ export async function GET(request: NextRequest) {
     console.log('Debugging image path:', imagePath);
 
     // Check if the file exists
-    const fs = require('fs');
-    const path = require('path');
     const fullPath = path.join(process.cwd(), 'public', imagePath);
 
     console.log('Full file path:', fullPath);
