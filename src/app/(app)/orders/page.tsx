@@ -32,7 +32,7 @@ export default function OrderListPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [orders, setOrders] = useState<Order[]>([]);
     const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
-    const [activeTab, setActiveTab] = useState("all");
+    const [activeTab, setActiveTab] = useState("ongoing");
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [imageCache, setImageCache] = useState<{ [key: string]: string }>({});
 
@@ -41,6 +41,10 @@ export default function OrderListPage() {
     const [queueFilter, setQueueFilter] = useState("");
     const [searchFilter, setSearchFilter] = useState("");
     const [pickupDateFilter, setPickupDateFilter] = useState<Date | null>(null);
+
+    // Sorting states
+    const [sortBy, setSortBy] = useState<"priority" | "pickupDate" | "queueNumber" | "price">("priority");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
     useEffect(() => {
         const fetchOrders = async () => {
@@ -67,7 +71,7 @@ export default function OrderListPage() {
 
     useEffect(() => {
         applyFilters();
-    }, [statusFilter, queueFilter, searchFilter, pickupDateFilter, activeTab, orders]);
+    }, [statusFilter, queueFilter, searchFilter, pickupDateFilter, activeTab, orders, sortBy, sortOrder]);
 
     useEffect(() => {
         // Load images for all orders when orders change
@@ -159,7 +163,90 @@ export default function OrderListPage() {
             });
         }
 
+        // Apply sorting
+        filtered.sort((a, b) => {
+            let comparison = 0;
+
+            switch (sortBy) {
+                case "priority":
+                    // จัดลำดับความสำคัญตามสถานะและวันนัดรับ
+                    const priorityA = getPriorityScore(a);
+                    const priorityB = getPriorityScore(b);
+                    comparison = priorityA - priorityB;
+                    break;
+
+                case "pickupDate":
+                    const dateA = new Date(a.pickupDate);
+                    const dateB = new Date(b.pickupDate);
+                    comparison = dateA.getTime() - dateB.getTime();
+                    break;
+
+                case "queueNumber":
+                    comparison = a.queueNumber - b.queueNumber;
+                    break;
+
+                case "price":
+                    comparison = a.price - b.price;
+                    break;
+
+                default:
+                    comparison = 0;
+            }
+
+            return sortOrder === "asc" ? comparison : -comparison;
+        });
+
         setFilteredOrders(filtered);
+    };
+
+    // ฟังก์ชันคำนวณคะแนนความสำคัญ
+    const getPriorityScore = (order: Order) => {
+        let score = 0;
+        const today = new Date();
+        const pickupDate = new Date(order.pickupDate);
+        const daysUntilPickup = Math.ceil((pickupDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+        // สถานะการทำงาน (ยังไม่เริ่ม = สำคัญมาก, กำลังทำ = สำคัญปานกลาง)
+        if (order.processingStatus === "not_started") {
+            score += 100;
+        } else if (order.processingStatus === "in_progress") {
+            score += 50;
+        }
+
+        // วันนัดรับ (ยิ่งใกล้ยิ่งสำคัญ)
+        if (daysUntilPickup <= 0) {
+            score += 200; // เลยกำหนดแล้ว = สำคัญที่สุด
+        } else if (daysUntilPickup <= 1) {
+            score += 150; // วันนี้หรือพรุ่งนี้
+        } else if (daysUntilPickup <= 3) {
+            score += 100; // 2-3 วัน
+        } else if (daysUntilPickup <= 7) {
+            score += 50;  // สัปดาห์นี้
+        }
+
+        // การชำระเงิน (ยังไม่จ่าย = ลำดับต่ำกว่า)
+        if (!order.paymentStatus) {
+            score -= 10;
+        }
+
+        return score;
+    };
+
+    // ฟังก์ชันแสดงไอคอนความสำคัญ
+    const getPriorityIcon = (order: Order) => {
+        const score = getPriorityScore(order);
+
+        if (score >= 250) {
+            return <span className="text-red-600 text-lg" title={`คะแนนความสำคัญ: ${score}`}>🚨</span>; // ฉุกเฉิน
+        } else if (score >= 150) {
+            return <span className="text-orange-500 text-lg" title={`คะแนนความสำคัญ: ${score}`}>⚡</span>; // สำคัญมาก
+        } else if (score >= 100) {
+            return <span className="text-yellow-500 text-lg" title={`คะแนนความสำคัญ: ${score}`}>⭐</span>; // สำคัญ
+        } else if (score >= 50) {
+            return <span className="text-blue-500 text-lg" title={`คะแนนความสำคัญ: ${score}`}>📋</span>; // ปกติ
+        } else {
+            return <span className="text-gray-400 text-lg" title={`คะแนนความสำคัญ: ${score}`}>⭕</span>; // ความสำคัญต่ำ
+        }
     };
 
     const resetFilters = () => {
@@ -167,6 +254,8 @@ export default function OrderListPage() {
         setQueueFilter("");
         setSearchFilter("");
         setPickupDateFilter(null);
+        setSortBy("priority");
+        setSortOrder("asc");
     };
 
     const formatDate = (dateString: string) => {
@@ -331,17 +420,6 @@ export default function OrderListPage() {
             <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
                 <Tabs.List className="flex border-b mb-6 bg-white rounded-t-lg overflow-hidden">
                     <Tabs.Trigger
-                        value="all"
-                        className={cn(
-                            "px-6 py-3 border-b-2 transition-colors font-medium",
-                            activeTab === "all"
-                                ? "border-violet-600 text-violet-600 bg-violet-50"
-                                : "border-transparent hover:text-violet-600 hover:bg-violet-50/50"
-                        )}
-                    >
-                        ทั้งหมด
-                    </Tabs.Trigger>
-                    <Tabs.Trigger
                         value="ongoing"
                         className={cn(
                             "px-6 py-3 border-b-2 transition-colors font-medium",
@@ -363,12 +441,66 @@ export default function OrderListPage() {
                     >
                         เสร็จสิ้นแล้ว
                     </Tabs.Trigger>
+                    <Tabs.Trigger
+                        value="all"
+                        className={cn(
+                            "px-6 py-3 border-b-2 transition-colors font-medium",
+                            activeTab === "all"
+                                ? "border-violet-600 text-violet-600 bg-violet-50"
+                                : "border-transparent hover:text-violet-600 hover:bg-violet-50/50"
+                        )}
+                    >
+                        ทั้งหมด
+                    </Tabs.Trigger>
                 </Tabs.List>
 
                 <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-100">
-                    <h2 className="text-lg font-medium text-gray-800 mb-4">ค้นหาและกรองรายการ</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                    <h2 className="text-lg font-medium text-gray-800 mb-4">ค้นหา กรอง และเรียงลำดับรายการ</h2>
 
+                    {/* ส่วนการเรียงลำดับ */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-violet-50 rounded-lg border border-violet-200">
+                        <div>
+                            <label className="block text-sm font-medium text-violet-700 mb-2">
+                                📊 เรียงลำดับตาม
+                            </label>
+                            <Select value={sortBy} onValueChange={(value: "priority" | "pickupDate" | "queueNumber" | "price") => setSortBy(value)}>
+                                <SelectTrigger className="bg-white border-violet-300 focus:border-violet-500 focus:ring-violet-500">
+                                    <SelectValue placeholder="เลือกการเรียงลำดับ" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="priority">🎯 ความสำคัญ (แนะนำ)</SelectItem>
+                                    <SelectItem value="pickupDate">📅 วันนัดรับ</SelectItem>
+                                    <SelectItem value="queueNumber">🔢 หมายเลขคิว</SelectItem>
+                                    <SelectItem value="price">💰 ราคา</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-violet-700 mb-2">
+                                🔄 ทิศทางการเรียง
+                            </label>
+                            <Select value={sortOrder} onValueChange={(value: "asc" | "desc") => setSortOrder(value)}>
+                                <SelectTrigger className="bg-white border-violet-300 focus:border-violet-500 focus:ring-violet-500">
+                                    <SelectValue placeholder="เลือกทิศทาง" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="asc">
+                                        {sortBy === "priority" ? "⬆️ สำคัญมากก่อน" :
+                                            sortBy === "pickupDate" ? "⬆️ วันใกล้ก่อน" :
+                                                sortBy === "price" ? "⬆️ ราคาน้อยก่อน" : "⬆️ น้อยไปมาก"}
+                                    </SelectItem>
+                                    <SelectItem value="desc">
+                                        {sortBy === "priority" ? "⬇️ สำคัญน้อยก่อน" :
+                                            sortBy === "pickupDate" ? "⬇️ วันไกลก่อน" :
+                                                sortBy === "price" ? "⬇️ ราคามากก่อน" : "⬇️ มากไปน้อย"}
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">ลูกค้า</label>
                             <Input
@@ -390,7 +522,14 @@ export default function OrderListPage() {
                         </div>
                     </div>
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-between items-center">
+                        <div className="text-sm text-gray-600">
+                            {sortBy === "priority" && (
+                                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-medium">
+                                    💡 เรียงตามความสำคัญ: สถานะงาน + วันนัดรับ + การชำระเงิน
+                                </span>
+                            )}
+                        </div>
                         <Button
                             variant="outline"
                             onClick={resetFilters}
@@ -414,6 +553,11 @@ export default function OrderListPage() {
                         <table className="min-w-full divide-y divide-gray-200 shadow-md rounded-lg overflow-hidden">
                             <thead className="bg-violet-100">
                                 <tr>
+                                    {sortBy === "priority" && (
+                                        <th scope="col" className="px-3 py-3 text-left text-xs font-semibold text-violet-800 uppercase tracking-wider">
+                                            🎯
+                                        </th>
+                                    )}
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-violet-800 uppercase tracking-wider">
                                         คิว
                                     </th>
@@ -430,44 +574,60 @@ export default function OrderListPage() {
                                         วันนัดรับ
                                     </th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-violet-800 uppercase tracking-wider">
-                                        ราคา
+                                        การชำระเงิน
                                     </th>
                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-violet-800 uppercase tracking-wider">
                                         สถานะ
-                                    </th>
-                                    <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-violet-800 uppercase tracking-wider">
-                                        การชำระเงิน
-                                    </th>
-                                    <th scope="col" className="px-6 py-3 text-right text-xs font-semibold text-violet-800 uppercase tracking-wider">
-                                        จัดการ
                                     </th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                                 {filteredOrders.map((order) => (
-                                    <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                                    <tr
+                                        key={order.id}
+                                        className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                        onClick={(e) => {
+                                            // ป้องกันการนำทางเมื่อคลิกที่รูปภาพ
+                                            if ((e.target as HTMLElement).closest('.image-preview-container')) {
+                                                return;
+                                            }
+                                            // นำทางไปหน้าแก้ไข
+                                            window.location.href = `/orders/${order.id}`;
+                                        }}
+                                        title="คลิกเพื่อแก้ไขรายการนี้"
+                                    >
+                                        {sortBy === "priority" && (
+                                            <td className="px-3 py-4 whitespace-nowrap text-center">
+                                                {getPriorityIcon(order)}
+                                            </td>
+                                        )}
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-800">
                                             #{order.queueNumber}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            {getFirstImageUrl(order) ? (
-                                                <div
-                                                    className="relative h-12 w-12 rounded-md overflow-hidden cursor-pointer border border-gray-200 hover:border-violet-500 transition-colors"
-                                                    onClick={() => setPreviewImage(getFirstImageUrl(order))}
-                                                >
-                                                    <img
-                                                        src={getFirstImageUrl(order)!}
-                                                        alt="รูปภาพออเดอร์"
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="h-12 w-12 rounded-md flex items-center justify-center bg-gray-100 text-gray-400">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                    </svg>
-                                                </div>
-                                            )}
+                                            <div className="image-preview-container">
+                                                {getFirstImageUrl(order) ? (
+                                                    <div
+                                                        className="relative h-12 w-12 rounded-md overflow-hidden cursor-pointer border border-gray-200 hover:border-violet-500 transition-colors"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation(); // ป้องกันการ trigger click event ของ row
+                                                            setPreviewImage(getFirstImageUrl(order));
+                                                        }}
+                                                    >
+                                                        <img
+                                                            src={getFirstImageUrl(order)!}
+                                                            alt="รูปภาพออเดอร์"
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="h-12 w-12 rounded-md flex items-center justify-center bg-gray-100 text-gray-400">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                        </svg>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="text-sm font-medium text-gray-800">{order.customerName}</div>
@@ -480,7 +640,25 @@ export default function OrderListPage() {
                                             {formatDate(order.pickupDate)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm font-semibold text-gray-800">{order.price.toLocaleString()} บาท</div>
+                                            <span className={`px-3 py-1.5 inline-flex text-xs leading-5 font-semibold rounded-lg shadow-sm ${getPaymentStatusColor(order.paymentStatus)}`}>
+                                                <span className="flex items-center">
+                                                    {order.paymentStatus ? (
+                                                        <>
+                                                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                            </svg>
+                                                            ชำระแล้ว
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                            </svg>
+                                                            ยังไม่ชำระ
+                                                        </>
+                                                    )}
+                                                </span>
+                                            </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-3 py-1.5 inline-flex text-xs leading-5 font-semibold rounded-lg shadow-sm ${getStatusColor(order.processingStatus)}`}>
@@ -503,33 +681,6 @@ export default function OrderListPage() {
                                                     {getStatusText(order.processingStatus)}
                                                 </span>
                                             </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`px-3 py-1.5 inline-flex text-xs leading-5 font-semibold rounded-lg shadow-sm ${getPaymentStatusColor(order.paymentStatus)}`}>
-                                                <span className="flex items-center">
-                                                    {order.paymentStatus ? (
-                                                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                                            <path d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zM14 6a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h8zM6 10a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h3a1 1 0 100-2H7z" />
-                                                        </svg>
-                                                    ) : (
-                                                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                                            <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
-                                                        </svg>
-                                                    )}
-                                                    {order.paymentStatus ? "จ่ายแล้ว" : "ยังไม่จ่าย"}
-                                                </span>
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <Link href={`/orders/${order.id}`}>
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    className="hover:bg-violet-100 hover:text-violet-700 transition-colors"
-                                                >
-                                                    แก้ไข
-                                                </Button>
-                                            </Link>
                                         </td>
                                     </tr>
                                 ))}
